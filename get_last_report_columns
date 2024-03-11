@@ -5,6 +5,12 @@ end pkg_generate_report;
 
 ---------------------------------------------
 create or replace package body pkg_generate_report as
+  v_app_id         number;
+  v_page_id        number;
+  l_region_id      apex_application_page_regions.region_id%type;
+  v_last_report_id varchar2(4000);
+  v_rep_columns    varchar2(4000);
+  v_columns_labels varchar2(4000);
 procedure get_last_report_columns as
   
   begin
