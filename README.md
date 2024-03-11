@@ -18,4 +18,4 @@ begin
 end;
 
 
-v_report_sql is xml for your query
+v_report_xml is xml for your query
