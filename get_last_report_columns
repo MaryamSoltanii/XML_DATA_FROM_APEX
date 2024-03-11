@@ -1,3 +1,9 @@
+create or replace package pkg_generate_report as
+
+procedure sql2xml(in_app_id number, in_page_id number, out_clob out clob);
+end pkg_generate_report;
+
+---------------------------------------------
 create or replace package body pkg_generate_report as
 procedure get_last_report_columns as
   
