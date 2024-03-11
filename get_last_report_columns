@@ -1,0 +1,155 @@
+create or replace package body pkg_generate_report as
+procedure get_last_report_columns as
+  
+  begin
+  
+    select apex_230200.wwv_flow_ir_api.get_last_viewed_report_id(p_page_id   => v_page_id,
+                                                                 p_region_id => l_region_id)
+      into v_last_report_id
+      from dual;
+  
+    select report_columns
+      into v_rep_columns
+      from apex_230200.apex_application_page_ir_rpt
+     where application_id = v_app_id
+       and page_id = v_page_id
+       and session_id = V('SESSION')
+       and base_report_id = v_last_report_id;
+  
+  end get_last_report_columns;
+---------------------------------------------
+ procedure get_columns_labels as
+  begin
+  
+    get_last_report_columns;
+    
+    select LISTAGG(report_label, ':') WITHIN group(order by 1)
+      into v_columns_labels
+      from apex_230200.apex_application_page_ir_col
+     where application_id = v_app_id
+       and page_id = v_page_id
+       and column_alias in
+           (select column_value
+              from table(apex_string.split(v_rep_columns, ':')));
+  
+  end get_columns_labels;
+---------------------------------------------
+procedure sql2xml(in_app_id number, in_page_id number, out_clob out clob) as
+  
+    l_ctx dbms_xmlgen.ctxhandle;
+    lv_collection_name constant apex_collections.collection_name%type default 'REPORT_COL';
+    v_clob           clob;
+    l_col_count      number;
+    description_tab  dbms_sql.desc_tab;
+    l_report         apex_ir.t_report;
+    rec_report_name  APEX_APPLICATION_GLOBAL.VC_ARR2;
+    rec_report_value APEX_APPLICATION_GLOBAL.VC_ARR2;
+    rec_names        apex_application_global.vc_arr2;
+    rec_values       apex_application_global.vc_arr2;
+    cur              number;
+    cur1             sys_refcursor;
+    l_result         varchar2(4000);
+    v_c001           varchar2(4000);
+  
+  begin
+ 
+  
+    v_page_id := in_page_id;
+    v_app_id  := in_app_id;
+
+    select region_id
+      into l_region_id
+      from apex_application_page_regions
+     where page_id = in_page_id
+       and application_id = in_app_id
+       and source_type = 'Interactive Report';
+  
+    l_report := apex_ir.get_report(p_page_id   => in_page_id,
+                                   p_region_id => l_region_id,
+                                   p_report_id => null);
+  
+    for i in 1 .. l_report.binds.count loop
+      rec_report_name(i) := l_report.binds(i).name;
+      rec_report_value(i) := l_report.binds(i).value;
+    end loop;
+    apex_collection.create_or_truncate_collection('REPORT_BINDS');
+    apex_collection.add_members(p_collection_name => 'REPORT_BINDS',
+                                p_c001            => rec_report_name,
+                                p_c002            => rec_report_value);
+  
+    select c001, c002
+      bulk collect
+      into rec_names, rec_values
+      from apex_collections
+     where collection_name = 'REPORT_BINDS'
+     order by seq_id;
+  
+    cur := dbms_sql.open_cursor;
+    dbms_sql.parse(cur, l_report.sql_query, dbms_sql.native);
+    dbms_sql.describe_columns(c       => cur,
+                              col_cnt => l_col_count,
+                              desc_t  => description_tab);
+  
+    for i in 1 .. l_col_count loop
+      if i = 1 then
+        l_result := description_tab(i).col_name;
+      else
+        l_result := l_result || ',' || description_tab(i).col_name;
+      end if;
+    end loop;
+
+    get_columns_labels;
+
+    apex_collection.create_collection_from_query_b(p_collection_name    => lv_collection_name,
+                                                   p_query              => l_report.sql_query,
+                                                   p_names              => rec_names,
+                                                   p_values             => rec_values,
+                                                   p_truncate_if_exists => 'YES');
+  
+    open cur1 for
+      select cursor (select c001,
+                            c002,
+                            c003,
+                            c004,
+                            c005,
+                            c006,
+                            c007,
+                            c008,
+                            c009,
+                            c010,
+                            c011,
+                            c012,
+                            c013,
+                            c014,
+                            c015,
+                            c016,
+                            c017,
+                            c018,
+                            c019,
+                            c020,
+                            c021,
+                            c022,
+                            c023,
+                            c024,
+                            c025,
+                            c026,
+                            c027,
+                            c028,
+                            c029,
+                            c030
+                       from apex_collections
+                      where collection_name = lv_collection_name) as rowset1,
+             
+             cursor (select column_value
+                       from table(apex_string.split(v_columns_labels, ':'))) as lable_col
+      
+        from dual;
+  
+    l_ctx := dbms_xmlgen.newcontext(cur1);
+    dbms_xmlgen.setrowsettag(l_ctx, 'DATA_DS');
+    dbms_xmlgen.setrowtag(l_ctx, 'ROW');
+    out_clob := dbms_xmlgen.getXml(l_ctx);
+    dbms_xmlgen.closeContext(l_ctx);
+  
+  end sql2xml;
+end pkg_generate_report;
